@@ -1,0 +1,19 @@
+# نتايج التشغيل (فيها بيانات recon حقيقية - ملهاش لازمة في الـ repo)
+runs/
+uploads_staging/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# لوجات وملفات مؤقتة
+*.log
+server.log
+
+# محررات/أنظمة تشغيل
+.vscode/
+.idea/
+.DS_Store

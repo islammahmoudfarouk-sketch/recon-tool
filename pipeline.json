@@ -1,0 +1,721 @@
+{
+  "phases": [
+    {
+      "id": "subs_passive",
+      "title": "1. Passive Subdomain Enumeration",
+      "icon": "🛰️",
+      "steps": [
+        {
+          "id": "subfinder",
+          "tool": "subfinder",
+          "bin": "subfinder",
+          "category": "subdomains",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+          },
+          "cmd": "subfinder -d {target} -all -recursive -o {outdir}/Subs01.txt {extra_args}",
+          "produces": "Subs01.txt"
+        },
+        {
+          "id": "assetfinder",
+          "tool": "assetfinder",
+          "bin": "assetfinder",
+          "category": "subdomains",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/tomnomnom/assetfinder@latest"
+          },
+          "cmd": "bash -c \"assetfinder --subs-only {target} > {outdir}/Subs02.txt\"",
+          "produces": "Subs02.txt"
+        },
+        {
+          "id": "amass_passive",
+          "tool": "amass (passive)",
+          "bin": "amass",
+          "category": "subdomains",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/owasp-amass/amass/v4/...@master"
+          },
+          "cmd": "amass enum -passive -d {target} -o {outdir}/Subs03.txt {extra_args}",
+          "produces": "Subs03.txt",
+          "slow": true
+        },
+        {
+          "id": "findomain",
+          "tool": "findomain",
+          "bin": "findomain",
+          "category": "subdomains",
+          "install": {
+            "type": "manual",
+            "note": "ثبته من https://github.com/Findomain/Findomain/releases (باينري جاهز)"
+          },
+          "cmd": "findomain -t {target} -u {outdir}/Subs05.txt",
+          "produces": "Subs05.txt"
+        },
+        {
+          "id": "crtsh",
+          "tool": "crt.sh (Certificate Transparency)",
+          "bin": null,
+          "category": "subdomains",
+          "install": null,
+          "cmd": "bash -c \"curl -s 'https://crt.sh/?q=%25.{target}&output=json' | jq -r '.[].name_value' | sed 's/\\*\\.//g' | tr '\\n' ',' | tr ',' '\\n' | grep -oE '[A-Za-z0-9._-]+\\.{target_escaped}' | sort -u > {outdir}/Subs06.txt\"",
+          "produces": "Subs06.txt"
+        },
+        {
+          "id": "chaos",
+          "tool": "chaos (projectdiscovery)",
+          "bin": "chaos",
+          "category": "subdomains",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/projectdiscovery/chaos-client/cmd/chaos@latest"
+          },
+          "cmd": "bash -c \"PDCP_API_KEY={chaos_api_key} chaos -d {target} -o {outdir}/Subs09.txt\"",
+          "produces": "Subs09.txt",
+          "requires": [
+            "chaos_api_key"
+          ],
+          "requires_hint": "محتاج PDCP API key من https://chaos.projectdiscovery.io"
+        },
+        {
+          "id": "github_subdomains",
+          "tool": "github-subdomains",
+          "bin": "github-subdomains",
+          "category": "subdomains",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/gwen001/github-subdomains@latest"
+          },
+          "cmd": "github-subdomains -d {target} -t {github_token} -o {outdir}/Subs10.txt",
+          "produces": "Subs10.txt",
+          "requires": [
+            "github_token"
+          ],
+          "requires_hint": "محتاج GitHub token من https://github.com/settings/tokens"
+        }
+      ]
+    },
+    {
+      "id": "subs_active",
+      "title": "2. Active Subdomain Bruteforce",
+      "icon": "💥",
+      "steps": [
+        {
+          "id": "dnsx_bruteforce",
+          "tool": "dnsx (bruteforce)",
+          "bin": "dnsx",
+          "category": "subdomains",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
+          },
+          "cmd": "dnsx -silent -d {target} -w {wordlist_dns} -o {outdir}/Subs07.txt",
+          "produces": "Subs07.txt",
+          "requires": [
+            "wordlist_dns"
+          ]
+        },
+        {
+          "id": "puredns",
+          "tool": "puredns (bruteforce)",
+          "bin": "puredns",
+          "category": "subdomains",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/d3mondev/puredns/v2@latest"
+          },
+          "cmd": "puredns bruteforce {wordlist_dns} {target} -r {resolvers} -w {outdir}/Subs08.txt",
+          "produces": "Subs08.txt",
+          "requires": [
+            "wordlist_dns",
+            "resolvers"
+          ]
+        },
+        {
+          "id": "amass_brute",
+          "tool": "amass (brute)",
+          "bin": "amass",
+          "category": "subdomains",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/owasp-amass/amass/v4/...@master"
+          },
+          "cmd": "amass enum -d {target} -brute -w {wordlist_dns} -o {outdir}/Subs11.txt",
+          "produces": "Subs11.txt",
+          "requires": [
+            "wordlist_dns"
+          ],
+          "slow": true
+        },
+        {
+          "id": "ffuf_subdomain",
+          "tool": "ffuf (subdomain fuzz)",
+          "bin": "ffuf",
+          "category": "subdomains",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/ffuf/ffuf/v2@latest"
+          },
+          "cmd": "ffuf -u https://FUZZ.{target} -w {wordlist_dns} -mc 200,301,302,307,401,403 -of json -o {outdir}/ffuf_subs.json -s",
+          "produces": "ffuf_subs.json",
+          "requires": [
+            "wordlist_dns"
+          ],
+          "slow": true
+        }
+      ]
+    },
+    {
+      "id": "merge_subs",
+      "title": "3. دمج وتنقية السب-دومينز",
+      "icon": "🧹",
+      "steps": [
+        {
+          "id": "merge_subs",
+          "tool": "دمج + إزالة تكرار (Subs*.txt → AllSubs.txt)",
+          "bin": null,
+          "category": "subdomains",
+          "install": null,
+          "cmd": "__builtin_merge_glob__",
+          "builtin": true,
+          "builtin_args": {
+            "glob": "Subs*.txt",
+            "output": "AllSubs.txt"
+          },
+          "produces": "AllSubs.txt"
+        }
+      ]
+    },
+    {
+      "id": "alive",
+      "title": "4. Alive Host Detection",
+      "icon": "💓",
+      "steps": [
+        {
+          "id": "httpx_alive",
+          "tool": "httpx",
+          "bin": "httpx",
+          "category": "alive",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/projectdiscovery/httpx/cmd/httpx@latest"
+          },
+          "input_param": "input_file",
+          "input_default": "AllSubs.txt",
+          "cmd": "bash -c \"cat {outdir}/{input_file} | httpx -silent {flags} -o {outdir}/AliveSubs_full.txt; cat {outdir}/{input_file} | httpx -silent -o {outdir}/AliveSubs.txt\"",
+          "produces": "AliveSubs.txt",
+          "flags": [
+            {
+              "label": "Status Code",
+              "flag": "-status-code",
+              "default": true
+            },
+            {
+              "label": "Title",
+              "flag": "-title",
+              "default": true
+            },
+            {
+              "label": "Content Length",
+              "flag": "-content-length",
+              "default": true
+            },
+            {
+              "label": "Web Server",
+              "flag": "-web-server",
+              "default": true
+            },
+            {
+              "label": "Tech Detect",
+              "flag": "-tech-detect",
+              "default": false
+            },
+            {
+              "label": "Follow Redirects",
+              "flag": "-follow-redirects",
+              "default": true
+            },
+            {
+              "label": "فقط 200",
+              "flag": "-match-code 200",
+              "default": false
+            },
+            {
+              "label": "استبعاد 400",
+              "flag": "-filter-code 400",
+              "default": false
+            },
+            {
+              "label": "IP",
+              "flag": "-ip",
+              "default": false
+            },
+            {
+              "label": "CDN Check",
+              "flag": "-cdn",
+              "default": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "url_discovery",
+      "title": "5. URL Discovery",
+      "icon": "🔗",
+      "steps": [
+        {
+          "id": "waybackurls",
+          "tool": "waybackurls",
+          "bin": "waybackurls",
+          "category": "urls",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/tomnomnom/waybackurls@latest"
+          },
+          "input_param": "input_file",
+          "input_default": "AliveSubs.txt",
+          "cmd": "bash -c \"cat {outdir}/{input_file} | waybackurls > {outdir}/WB1.txt\"",
+          "produces": "WB1.txt"
+        },
+        {
+          "id": "gau",
+          "tool": "gau",
+          "bin": "gau",
+          "category": "urls",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/lc/gau/v2/cmd/gau@latest"
+          },
+          "input_param": "input_file",
+          "input_default": "AliveSubs.txt",
+          "cmd": "bash -c \"cat {outdir}/{input_file} | gau --threads 100 {extra_args} > {outdir}/GAU1.txt\"",
+          "produces": "GAU1.txt"
+        },
+        {
+          "id": "gauplus",
+          "tool": "gauplus",
+          "bin": "gauplus",
+          "category": "urls",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/bp0lr/gauplus@latest"
+          },
+          "input_param": "input_file",
+          "input_default": "AliveSubs.txt",
+          "cmd": "bash -c \"gauplus -t 100 -random-agent < {outdir}/{input_file} > {outdir}/GAU2.txt\"",
+          "produces": "GAU2.txt"
+        },
+        {
+          "id": "katana",
+          "tool": "katana",
+          "bin": "katana",
+          "category": "urls",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/projectdiscovery/katana/cmd/katana@latest"
+          },
+          "input_param": "input_file",
+          "input_default": "AliveSubs.txt",
+          "cmd": "katana -list {outdir}/{input_file} -jc -d 3 -silent -f url -o {outdir}/KTN1.txt",
+          "produces": "KTN1.txt",
+          "slow": true
+        },
+        {
+          "id": "hakrawler",
+          "tool": "hakrawler",
+          "bin": "hakrawler",
+          "category": "urls",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/hakluke/hakrawler@latest"
+          },
+          "input_param": "input_file",
+          "input_default": "AliveSubs.txt",
+          "cmd": "bash -c \"cat {outdir}/{input_file} | hakrawler -subs -u -insecure > {outdir}/HK1.txt\"",
+          "produces": "HK1.txt"
+        },
+        {
+          "id": "gospider",
+          "tool": "gospider",
+          "bin": "gospider",
+          "category": "urls",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/jaeles-project/gospider@latest"
+          },
+          "input_param": "input_file",
+          "input_default": "AliveSubs.txt",
+          "cmd": "gospider -S {outdir}/{input_file} -t 20 -d 3 --js --sitemap --robots -o {outdir}/gospider_out",
+          "produces": "gospider_out",
+          "slow": true
+        },
+        {
+          "id": "paramspider",
+          "tool": "paramspider",
+          "bin": "paramspider",
+          "category": "urls",
+          "install": {
+            "type": "pip",
+            "pkg": "git+https://github.com/devanshbatham/paramspider.git"
+          },
+          "cmd": "bash -c \"cd {outdir} && paramspider -d {target} -o PS1.txt 2>paramspider_err.log; [ -s PS1.txt ] || find . -maxdepth 3 -iname '*{target}*' -newer paramspider_err.log 2>/dev/null | grep -v PS1.txt | head -1 | xargs -I{{F}} cp {{F}} PS1.txt 2>/dev/null; touch PS1.txt\"",
+          "produces": "PS1.txt"
+        }
+      ]
+    },
+    {
+      "id": "merge_urls",
+      "title": "6. دمج الروابط + تصنيفها",
+      "icon": "📂",
+      "steps": [
+        {
+          "id": "merge_urls",
+          "tool": "دمج + إزالة تكرار (WB1/GAU*/KTN1/HK1/PS1 → AllURLs.txt)",
+          "bin": null,
+          "category": "urls",
+          "install": null,
+          "cmd": "__builtin_merge_glob__",
+          "builtin": true,
+          "builtin_args": {
+            "glob": "WB1.txt,GAU1.txt,GAU2.txt,KTN1.txt,HK1.txt,PS1.txt",
+            "output": "AllURLs.txt"
+          },
+          "produces": "AllURLs.txt"
+        },
+        {
+          "id": "extract_categories",
+          "tool": "تصنيف الروابط (js/php/admin/login/secrets...)",
+          "bin": null,
+          "category": "urls",
+          "install": null,
+          "input_param": "input_file",
+          "input_default": "AllURLs.txt",
+          "cmd": "__builtin_extract__",
+          "produces": "categories/*",
+          "builtin": true
+        },
+        {
+          "id": "extract_params",
+          "tool": "استخراج الباراميترز + نسخة FUZZ-ready",
+          "bin": null,
+          "category": "params",
+          "install": null,
+          "input_param": "input_file",
+          "input_default": "AllURLs.txt",
+          "cmd": "__builtin_params__",
+          "produces": "params.txt / param_fuzz.txt",
+          "builtin": true
+        }
+      ]
+    },
+    {
+      "id": "js_secrets",
+      "title": "7. JavaScript & Secret Discovery",
+      "icon": "🔑",
+      "steps": [
+        {
+          "id": "js_regex_secrets",
+          "tool": "فحص Regex لأسرار داخل ملفات JS",
+          "bin": null,
+          "category": "secrets",
+          "install": null,
+          "input_param": "input_file",
+          "input_default": "categories/js.txt",
+          "cmd": "__builtin_js_secrets__",
+          "produces": "secrets_found.txt",
+          "builtin": true
+        },
+        {
+          "id": "trufflehog_fs",
+          "tool": "trufflehog (filesystem scan)",
+          "bin": "trufflehog",
+          "category": "secrets",
+          "install": {
+            "type": "manual",
+            "note": "curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin"
+          },
+          "input_param": "input_file",
+          "input_default": "categories/js.txt",
+          "cmd": "trufflehog filesystem {outdir}/{input_file} --json > {outdir}/trufflehog_results.json",
+          "produces": "trufflehog_results.json"
+        }
+      ]
+    },
+    {
+      "id": "infra",
+      "title": "8. Infrastructure & OSINT",
+      "icon": "🌐",
+      "steps": [
+        {
+          "id": "osint_links",
+          "tool": "روابط OSINT + Google/GitHub Dorks جاهزة",
+          "bin": null,
+          "category": "osint",
+          "install": null,
+          "cmd": "__builtin_osint_links__",
+          "produces": "osint_links.txt",
+          "builtin": true
+        },
+        {
+          "id": "asnmap",
+          "tool": "asnmap",
+          "bin": "asnmap",
+          "category": "infra",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/projectdiscovery/asnmap/cmd/asnmap@latest"
+          },
+          "cmd": "asnmap -d {target} -silent -o {outdir}/asn.txt",
+          "produces": "asn.txt"
+        },
+        {
+          "id": "whois_asn",
+          "tool": "whois (ASN lookup)",
+          "bin": "whois",
+          "category": "infra",
+          "install": {
+            "type": "apt",
+            "pkg": "whois"
+          },
+          "cmd": "whois -h whois.radb.net {asn} > {outdir}/whois_asn.txt",
+          "produces": "whois_asn.txt",
+          "requires": [
+            "asn"
+          ],
+          "requires_hint": "دخّل رقم الـ ASN (مثال: AS17012) من خطوة asnmap أو bgp.he.net"
+        }
+      ]
+    },
+    {
+      "id": "ports",
+      "title": "9. Port Discovery",
+      "icon": "🔌",
+      "steps": [
+        {
+          "id": "naabu",
+          "tool": "naabu",
+          "bin": "naabu",
+          "category": "ports",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/projectdiscovery/naabu/v2/cmd/naabu@latest"
+          },
+          "input_param": "input_file",
+          "input_default": "AliveSubs.txt",
+          "cmd": "naabu -list {outdir}/{input_file} {flags} -rate 1000 -silent -o {outdir}/ports.txt",
+          "produces": "ports.txt",
+          "slow": true,
+          "flags": [
+            {
+              "label": "Top 1000 Ports",
+              "flag": "-top-ports 1000",
+              "default": true
+            },
+            {
+              "label": "كل البورتات (0-65535)",
+              "flag": "-p -",
+              "default": false
+            },
+            {
+              "label": "عرض الخدمة",
+              "flag": "-sV",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "nmap",
+          "tool": "nmap",
+          "bin": "nmap",
+          "category": "ports",
+          "install": {
+            "type": "apt",
+            "pkg": "nmap"
+          },
+          "input_param": "input_file",
+          "input_default": "AliveSubs.txt",
+          "cmd": "nmap -iL {outdir}/{input_file} {flags} -oN {outdir}/nmap.txt",
+          "produces": "nmap.txt",
+          "slow": true,
+          "flags": [
+            {
+              "label": "T4 (سريع)",
+              "flag": "-T4",
+              "default": true
+            },
+            {
+              "label": "بدون Ping (Pn)",
+              "flag": "-Pn",
+              "default": true
+            },
+            {
+              "label": "كشف النسخة (-sV)",
+              "flag": "-sV",
+              "default": false
+            },
+            {
+              "label": "سكربتات افتراضية (-sC)",
+              "flag": "-sC",
+              "default": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dirfuzz",
+      "title": "10. Directory Fuzzing",
+      "icon": "📁",
+      "steps": [
+        {
+          "id": "feroxbuster",
+          "tool": "feroxbuster",
+          "bin": "feroxbuster",
+          "category": "dirfuzz",
+          "install": {
+            "type": "manual",
+            "note": "cargo install feroxbuster أو https://github.com/epi052/feroxbuster/releases"
+          },
+          "cmd": "feroxbuster -u https://{target} -w {wordlist_dir} -t 100 -d 2 -o {outdir}/feroxbuster.txt",
+          "produces": "feroxbuster.txt",
+          "requires": [
+            "wordlist_dir"
+          ],
+          "slow": true
+        },
+        {
+          "id": "ffuf_dir",
+          "tool": "ffuf (directories)",
+          "bin": "ffuf",
+          "category": "dirfuzz",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/ffuf/ffuf/v2@latest"
+          },
+          "cmd": "ffuf -u https://{target}/FUZZ -w {wordlist_dir} {flags} -of json -o {outdir}/ffuf_dir.json -s",
+          "produces": "ffuf_dir.json",
+          "requires": [
+            "wordlist_dir"
+          ],
+          "slow": true,
+          "flags": [
+            {
+              "label": "200,301,302,307,401,403",
+              "flag": "-mc 200,301,302,307,401,403",
+              "default": true
+            },
+            {
+              "label": "اضف Extensions شائعة",
+              "flag": "-e .php,.html,.js,.json,.bak,.zip",
+              "default": false
+            },
+            {
+              "label": "403 Bypass Headers",
+              "flag": "-H \"X-Forwarded-For: 127.0.0.1\" -H \"X-Original-URL: /FUZZ\"",
+              "default": false
+            },
+            {
+              "label": "Recursion",
+              "flag": "-recursion -recursion-depth 2",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "gobuster_dir",
+          "tool": "gobuster",
+          "bin": "gobuster",
+          "category": "dirfuzz",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/OJ/gobuster/v3@latest"
+          },
+          "cmd": "gobuster dir -u https://{target} -w {wordlist_dir} -k -o {outdir}/gobuster.txt",
+          "produces": "gobuster.txt",
+          "requires": [
+            "wordlist_dir"
+          ],
+          "slow": true
+        }
+      ]
+    },
+    {
+      "id": "params_vuln",
+      "title": "11. Parameter & Vulnerability Testing",
+      "icon": "⚠️",
+      "steps": [
+        {
+          "id": "arjun",
+          "tool": "arjun (hidden params)",
+          "bin": "arjun",
+          "category": "params",
+          "install": {
+            "type": "pip",
+            "pkg": "arjun"
+          },
+          "input_param": "input_file",
+          "input_default": "categories/php.txt",
+          "cmd": "arjun -i {outdir}/{input_file} -o {outdir}/arjun_params.json",
+          "produces": "arjun_params.json"
+        },
+        {
+          "id": "nuclei",
+          "tool": "nuclei",
+          "bin": "nuclei",
+          "category": "vuln",
+          "install": {
+            "type": "go",
+            "pkg": "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
+          },
+          "input_param": "input_file",
+          "input_default": "AliveSubs.txt",
+          "cmd": "nuclei -list {outdir}/{input_file} {flags} -silent -o {outdir}/nuclei_results.txt",
+          "produces": "nuclei_results.txt",
+          "slow": true,
+          "intrusive": true,
+          "flags": [
+            {
+              "label": "Exposures",
+              "flag": "-t exposures/",
+              "default": false
+            },
+            {
+              "label": "CVEs",
+              "flag": "-t cves/",
+              "default": false
+            },
+            {
+              "label": "Misconfiguration",
+              "flag": "-t misconfiguration/",
+              "default": false
+            },
+            {
+              "label": "شدة متوسطة فأعلى",
+              "flag": "-severity medium,high,critical",
+              "default": true
+            }
+          ]
+        },
+        {
+          "id": "sqlmap",
+          "tool": "sqlmap (SQLi testing)",
+          "bin": "sqlmap",
+          "category": "vuln",
+          "install": {
+            "type": "apt",
+            "pkg": "sqlmap"
+          },
+          "input_param": "input_file",
+          "input_default": "categories/injection_params.txt",
+          "cmd": "sqlmap -m {outdir}/{input_file} --batch --random-agent --level 1 --risk 1 --output-dir={outdir}/sqlmap_out",
+          "produces": "sqlmap_out/",
+          "slow": true,
+          "intrusive": true
+        }
+      ]
+    }
+  ]
+}

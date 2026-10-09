@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Eng. Islam Mahmoud">
+<title>:: RECON-X // automation framework ::</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="scanline"></div>
+
+<header>
+  <div class="term-dot red"></div><div class="term-dot yellow"></div><div class="term-dot green"></div>
+  <h1><span class="bracket">[</span>RECON<span class="blink">_</span>X<span class="bracket">]</span></h1>
+  <p class="sub">// automated recon pipeline — subdomains → alive → urls → secrets → ports → fuzz → vuln scan</p>
+</header>
+
+<main>
+
+  <section class="panel">
+    <h2>$ target.set()</h2>
+    <div class="grid2">
+      <div class="row">
+        <label>TARGET (domain)</label>
+        <input id="target" placeholder="example.com">
+      </div>
+      <div class="row">
+        <label>DNS WORDLIST <span class="opt">اختياري</span></label>
+        <input id="wordlist_dns" placeholder="/usr/share/wordlists/.../subdomains-top1million-110000.txt">
+      </div>
+      <div class="row">
+        <label>DIRECTORY WORDLIST <span class="opt">اختياري</span></label>
+        <input id="wordlist_dir" placeholder="/usr/share/wordlists/.../raft-medium-directories.txt">
+      </div>
+      <div class="row">
+        <label>RESOLVERS <span class="opt">اختياري - puredns</span></label>
+        <input id="resolvers" placeholder="resolvers.txt">
+      </div>
+      <div class="row">
+        <label>CHAOS API KEY <span class="opt">اختياري</span></label>
+        <input id="chaos_api_key" placeholder="PDCP_API_KEY" type="password">
+      </div>
+      <div class="row">
+        <label>GITHUB TOKEN <span class="opt">اختياري</span></label>
+        <input id="github_token" placeholder="ghp_xxx..." type="password">
+      </div>
+      <div class="row">
+        <label>ASN <span class="opt">اختياري - whois lookup</span></label>
+        <input id="asn" placeholder="AS17012">
+      </div>
+      <div class="row">
+        <label>رفع ملف جاهز <span class="opt">(مثلاً قايمة سب-دومينز تحطها بدل AllSubs.txt)</span></label>
+        <input id="fileUpload" type="file">
+        <div id="uploadedList" class="uploaded-list"></div>
+      </div>
+      <div class="row">
+        <label>📁 مكان الحفظ <span class="opt">(اختياري - مسار كامل على جهازك، فاضي = المكان الافتراضي)</span></label>
+        <input id="savePath" placeholder="/home/user/recon_results">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <label>⏮ متابعة من Run سابق <span class="opt">(هيشتغل على نفس المجلد وتقدر تختار ملفاته كـ input)</span></label>
+      <select id="prevRuns"><option value="">-- run جديد --</option></select>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>$ tools.check()</h2>
+    <div class="btn-row">
+      <button id="checkBtn" class="btn">🔍 افحص الأدوات المنصبة</button>
+      <span id="toolsSummary" class="muted"></span>
+    </div>
+    <div id="toolsStatus" class="tools-grid"></div>
+  </section>
+
+  <section class="panel">
+    <h2>$ pipeline.select()</h2>
+    <div class="btn-row">
+      <input id="searchBox" class="search" placeholder="🔎 دور على أداة... (subfinder, httpx, nuclei...)">
+      <button class="btn small" id="selectRecommended">⭐ المسار الموصى به</button>
+      <button class="btn small" id="selectAll">✅ تحديد الكل</button>
+      <button class="btn small" id="selectNone">❌ إلغاء الكل</button>
+      <button class="btn small" id="selectSafe">🛡 غير هجومي فقط</button>
+    </div>
+
+    <div id="phases">
+      {% for phase in pipeline.phases %}
+      <div class="phase" data-phase="{{ phase.id }}">
+        <div class="phase-header">
+          <label class="phase-title">
+            <input type="checkbox" class="phase-check" data-phase="{{ phase.id }}">
+            <span class="phase-icon">{{ phase.icon }}</span> {{ phase.title }}
+          </label>
+          <span class="phase-toggle" data-phase="{{ phase.id }}">▾</span>
+        </div>
+        <div class="steps" id="steps-{{ phase.id }}">
+          {% for step in phase.steps %}
+          <div class="step-block"
+               data-id="{{ step.id }}"
+               data-tool="{{ step.tool|lower }}"
+               data-recommended="{{ 'true' if not step.get('intrusive') and not step.get('requires') else 'false' }}"
+               data-intrusive="{{ 'true' if step.get('intrusive') else 'false' }}">
+            <label class="step">
+              <input type="checkbox" class="step-check" value="{{ step.id }}" data-phase="{{ phase.id }}">
+              <span class="step-name">{{ step.tool }}</span>
+              {% if step.slow %}<span class="tag tag-slow">⏱ بطيء</span>{% endif %}
+              {% if step.get('intrusive') %}<span class="tag tag-intrusive">⚠ هجومي</span>{% endif %}
+              {% if step.requires %}<span class="tag tag-warn">يحتاج: {{ step.requires|join(', ') }}</span>{% endif %}
+              <span class="status-dot" id="dot-{{ step.id }}" title="غير مفحوص"></span>
+              {% if step.get('input_param') or step.get('flags') %}
+              <span class="gear" data-target="opts-{{ step.id }}">⚙</span>
+              {% endif %}
+            </label>
+
+            {% if step.get('input_param') or step.get('flags') %}
+            <div class="step-opts" id="opts-{{ step.id }}" style="display:none">
+              {% if step.get('input_param') %}
+              <div class="opt-row">
+                <label>📂 ملف الإدخال:</label>
+                <input type="text" class="input-file-field" data-step="{{ step.id }}"
+                       value="{{ step.input_default }}" list="filelist-{{ step.id }}">
+                <datalist id="filelist-{{ step.id }}"></datalist>
+              </div>
+              {% endif %}
+              {% if step.get('flags') %}
+              <div class="opt-row flags-row">
+                <label>🚩 Flags:</label>
+                <div class="flags-list">
+                  {% for f in step.flags %}
+                  <label class="flag-chip">
+                    <input type="checkbox" class="flag-check" data-step="{{ step.id }}"
+                           value="{{ f.label }}" {{ 'checked' if f.default else '' }}>
+                    {{ f.label }}
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              <div class="opt-row">
+                <label>➕ Extra args:</label>
+                <input type="text" class="extra-args-field" data-step="{{ step.id }}" placeholder="أي flags إضافية">
+              </div>
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel sticky-run">
+    <button id="runBtn" class="btn primary">▶ RUN_PIPELINE</button>
+    <button id="stopBtn" class="btn danger" style="display:none">⏹ STOP</button>
+    <button id="newFolderBtn" class="btn small" title="يبطّل الاستمرار في نفس المجلد ويبدأ مجلد جديد في الـ run الجاي">🆕 مجلد جديد</button>
+    <span id="selectedCount" class="muted">0 خطوة متحددة</span>
+    <span id="runState" class="run-state"></span>
+    <div id="currentFolderIndicator" class="muted folder-indicator"></div>
+  </section>
+
+  <section class="panel">
+    <h2>$ tail -f pipeline.log</h2>
+    <pre id="log" class="log"></pre>
+  </section>
+
+  <section class="panel" id="alertsPanel" style="display:none">
+    <h2>⚠ تحذيرات وتشخيصات</h2>
+    <div id="diagList"></div>
+    <div id="warnList"></div>
+  </section>
+
+  <section class="panel" id="resultsPanel" style="display:none">
+    <h2>$ ls -la results/</h2>
+    <div id="fileList" class="file-grid"></div>
+
+    <div class="merge-box">
+      <h3>🧹 دمج ملفات وإزالة التكرار</h3>
+      <p class="muted">اختار أي ملفات من اللي فوق (بتاعة نفس الفئة غالباً) وهيدمجهم في ملف واحد بدون تكرار.</p>
+      <div class="row">
+        <label>اسم ملف الناتج</label>
+        <input id="mergeOutputName" value="merged_custom.txt">
+      </div>
+      <button id="mergeBtn" class="btn">🧬 دمج الملفات المحددة</button>
+      <div id="mergeResult" class="muted"></div>
+    </div>
+
+    <a id="reportLink" class="btn primary" target="_blank">📄 افتح التقرير الكامل</a>
+  </section>
+
+  <footer>
+    <p>RECON_X &copy; <span id="copyYear"></span> — Developed by <b>Eng. Islam Mahmoud</b></p>
+  </footer>
+
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
